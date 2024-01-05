@@ -95,3 +95,43 @@ class Color():
         self.loss_object = tf.keras.losses.BinaryCrossentropy(from_logits=True)
 
         self.gen_output, self.g_loss, self.d_loss = self.train_step()
+
+
+    
+    # Generator Build Helpers
+    # Creates a downsampling block for reducing image size in the generator
+    def downsample(self, filters, size, apply_batchnorm=True):
+        initializer = tf.random_normal_initializer(0., 0.02)
+        result = tf.keras.Sequential()
+        
+        result.add(
+            tf.keras.layers.Conv2D(filters, size, strides=2, padding='same',    # strides (2 for downsampling)
+            kernel_initializer=initializer, use_bias=False))
+
+        if apply_batchnorm:
+            result.add(tf.keras.layers.BatchNormalization())
+        # Adds a Leaky ReLU activation layer for non-linearity
+        result.add(tf.keras.layers.LeakyReLU())
+
+        return result
+
+    # Creates an upsampling block for increasing image size in the generator
+    def upsample(self, filters, size, apply_dropout=False):
+        initializer = tf.random_normal_initializer(0., 0.02)
+
+        result = tf.keras.Sequential()
+        result.add(
+            tf.keras.layers.Conv2DTranspose(filters, size, strides=2,   # strides (2 for upsampling)
+                                            padding='same',
+                                            kernel_initializer=initializer,
+                                            use_bias=False))
+
+        result.add(tf.keras.layers.BatchNormalization())
+
+        if apply_dropout:
+            
+            result.add(tf.keras.layers.Dropout(0.5))
+
+        result.add(tf.keras.layers.ReLU())
+
+        return result
