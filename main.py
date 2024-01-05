@@ -135,3 +135,76 @@ class Color():
         result.add(tf.keras.layers.ReLU())
 
         return result
+    
+
+        # Builds the generator model with a U-Net architecture for colorizing images
+    def Generator(self):
+        inputs = tf.keras.layers.Input(shape=[
+            self.image_size, 
+            self.image_size,
+            self.input_colors1 + self.input_colors2])
+
+        # Defines a list of downsampling blocks with varying filter counts 
+        down_stack = [
+            self.downsample(self.gf_dim, self.g_filter, apply_batchnorm=False), # (bs, 128, 128, 64)
+            self.downsample(self.gf_dim*2, self.g_filter), # (bs, 64, 64, 128)
+            self.downsample(self.gf_dim*4, self.g_filter), # (bs, 32, 32, 256)
+            self.downsample(self.gf_dim*8, self.g_filter), # (bs, 16, 16, 512)
+            self.downsample(self.gf_dim*8, self.g_filter), # (bs, 8, 8, 512)
+            self.downsample(self.gf_dim*8, self.g_filter), # (bs, 4, 4, 512)
+            self.downsample(self.gf_dim*8, self.g_filter), # (bs, 2, 2, 512)
+            self.downsample(self.gf_dim*8, self.g_filter), # (bs, 1, 1, 512)
+        ]
+
+        # Defines a list of upsampling blocks with dropout for regularization
+        up_stack = [
+            self.upsample(self.gf_dim*8, self.g_filter, apply_dropout=True), # (bs, 2, 2, 1024)
+            self.upsample(self.gf_dim*8, self.g_filter, apply_dropout=True), # (bs, 4, 4, 1024)
+            self.upsample(self.gf_dim*8, self.g_filter, apply_dropout=True), # (bs, 8, 8, 1024)
+            self.upsample(self.gf_dim*8, self.g_filter), # (bs, 16, 16, 1024)
+            self.upsample(self.gf_dim*4, self.g_filter), # (bs, 32, 32, 512)
+            self.upsample(self.gf_dim*2, self.g_filter), # (bs, 64, 64, 256)
+            self.upsample(self.gf_dim*1, self.g_filter), # (bs, 128, 128, 128)
+        ]
+
+        # Creates the final layer using a transposed convolutional layer with output_colors filters and a tanh activation for output images
+        initializer = tf.random_normal_initializer(0., 0.02)
+        last = tf.keras.layers.Conv2DTranspose(self.output_colors, self.g_filter,
+                                                strides=2,
+                                                padding='same',
+                                                kernel_initializer=initializer,
+                                                activation='tanh') # (bs, 256, 256, 3)
+
+        x = inputs
+
+        # Downsampling through the model
+        skips = []
+        for down in down_stack:
+            x = down(x)
+            skips.append(x)
+
+        skips = reversed(skips[:-1])
+
+        # Upsampling and establishing the skip connections
+        for up, skip in zip(up_stack, skips):
+            x = up(x)
+            x = tf.keras.layers.Concatenate()([x, skip])
+
+        # Applies the final layer to produce the colorized output image.
+        x = last(x)
+
+        # Returns a Keras model with the defined inputs and outputs.
+        return tf.keras.Model(inputs=inputs, outputs=x)
+
+
+    # Calculates losses to guide the generator towards realistic and accurate colorization
+    def generator_loss(self, disc_generated_output, gen_output, target):
+        # Uses binary cross-entropy loss to measure how well the discriminator was fooled by generated images
+        gan_loss = self.loss_object(tf.ones_like(disc_generated_output), disc_generated_output)
+
+        # mean absolute error
+        l1_loss = tf.reduce_mean(tf.abs(target - gen_output))
+
+        total_gen_loss = gan_loss + (self.l1_scaling * l1_loss)
+
+        return total_gen_loss, gan_loss, l1_loss
