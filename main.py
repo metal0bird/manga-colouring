@@ -196,7 +196,6 @@ class Color():
         # Returns a Keras model with the defined inputs and outputs.
         return tf.keras.Model(inputs=inputs, outputs=x)
 
-
     # Calculates losses to guide the generator towards realistic and accurate colorization
     def generator_loss(self, disc_generated_output, gen_output, target):
         # Uses binary cross-entropy loss to measure how well the discriminator was fooled by generated images
@@ -208,3 +207,49 @@ class Color():
         total_gen_loss = gan_loss + (self.l1_scaling * l1_loss)
 
         return total_gen_loss, gan_loss, l1_loss
+
+    # Discriminator Build Helpers
+    # Builds the discriminator model to classify images as real or generated
+    def Discriminator(self):
+        initializer = tf.random_normal_initializer(0., 0.02)
+
+        inp = tf.keras.layers.Input(shape=[self.image_size, self.image_size, self.input_colors1 + self.input_colors2], name='input_image')
+        tar = tf.keras.layers.Input(shape=[self.image_size, self.image_size, self.output_colors], name='target_image')
+
+        # Both images are first concatenated, creating a single input of (batch_size, image_size, image_size, input_colors1 + input_colors2) channels
+        x = tf.keras.layers.concatenate([inp, tar]) # (bs, 256, 256, channels*2)
+
+        # the discriminator uses a series of downsampling blocks to progressively reduce the image size and extract higher-level features
+        # A convolutional layer with increasing filter counts (64, 128, 256) to capture intricate details
+        down1 = self.downsample(self.df_dim, self.d_filter, False)(x) # (bs, 128, 128, 64)
+        down2 = self.downsample(self.df_dim*2, self.d_filter)(down1) # (bs, 64, 64, 128)
+        down3 = self.downsample(self.df_dim*4, self.d_filter)(down2) # (bs, 32, 32, 256)
+
+        zero_pad1 = tf.keras.layers.ZeroPadding2D()(down3) # (bs, 34, 34, 256)
+        conv = tf.keras.layers.Conv2D(self.df_dim*8, self.d_filter, strides=1,
+                                        kernel_initializer=initializer,
+                                        use_bias=False)(zero_pad1) # (bs, 31, 31, 512)
+
+        batchnorm1 = tf.keras.layers.BatchNormalization()(conv)
+
+        leaky_relu = tf.keras.layers.LeakyReLU()(batchnorm1)
+
+        zero_pad2 = tf.keras.layers.ZeroPadding2D()(leaky_relu) # (bs, 33, 33, 512)
+
+        # This layer has a single filter and serves as the final decision-making step
+        last = tf.keras.layers.Conv2D(1, 4, strides=1,
+                                        kernel_initializer=initializer)(zero_pad2) # (bs, 30, 30, 1)
+        
+        # The output of the discriminator is a single value for each image in the batch, representing the probability of that image being a real image
+        # A value close to 1 indicates a high probability of being real, while a value close to 0 indicates a high probability of being fake (generated)
+        return tf.keras.Model(inputs=[inp, tar], outputs=last)
+
+    # Calculates and combines losses to train the discriminator
+    def discriminator_loss(self, disc_real_output, disc_generated_output):
+        real_loss = self.loss_object(tf.ones_like(disc_real_output), disc_real_output)
+
+        generated_loss = self.loss_object(tf.zeros_like(disc_generated_output), disc_generated_output)
+
+        total_disc_loss = real_loss + generated_loss
+
+        return total_disc_loss
