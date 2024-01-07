@@ -17,8 +17,8 @@ imagecounter = 3065
 maxImages = 10000
 pagestepper = 0
 pageoffset = 50
-tags = 'earrings'
-savepath = 'Images_earrings/'
+tags = 'white_shirt+red_hair'
+savepath = 'Images_makima_like/'
 
 while imagecounter < maxImages:
     #Get a taged page
@@ -67,3 +67,8 @@ while imagecounter < maxImages:
                 break
             else:
                 imagecounter += 1
+
+
+
+
+
