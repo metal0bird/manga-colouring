@@ -13,12 +13,12 @@ ssl._create_default_https_context = ssl._create_unverified_context
 # The API template for pulls is given by Safebooru https://safebooru.org/index.php?page=help&topic=dapi
 # /index.php?page=dapi&s=post&q=index
 maxsize = 512
-imagecounter = 3065
+imagecounter = 0
 maxImages = 10000
 pagestepper = 0
 pageoffset = 50
-tags = 'white_shirt+red_hair'
-savepath = 'Images_makima_like/'
+tags = 'orange_eyes'
+savepath = 'Images_orange_eyes/'
 
 while imagecounter < maxImages:
     #Get a taged page
