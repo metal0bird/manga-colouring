@@ -366,3 +366,70 @@ class Color():
         colorCues = colorCues[1:]
         sketchifiedImages = sketchifiedImages[1:]
         return coloredImages, colorCues, sketchifiedImages
+
+
+    # Loads and prepares training and test data from pickle files
+    def getModelTrainData(self):
+        coloredImages, colorCues, sketchifiedImages = self.unpackProcessedPickle(usepath=self.trainpath)
+
+        if self.dataSetSize == 0:
+            self.dataSetSize = coloredImages.shape[0]
+
+        # reduce number images in the loaded data if desired:
+        coloredImages = coloredImages[:self.dataSetSize]
+        colorCues = colorCues[:self.dataSetSize]
+        sketchifiedImages = sketchifiedImages[:self.dataSetSize]
+
+        # shuffle then set aside a grouping for testing after the training
+        coloredImages, colorCues, sketchifiedImages = self.unison_shuffled_copies(
+            coloredImages, colorCues, sketchifiedImages)
+
+        testColored = coloredImages[:self.number_test]
+        testSketch = sketchifiedImages[:self.number_test]
+        testColorCues = colorCues[:self.number_test]
+        coloredImages = coloredImages[self.number_test:]
+        sketchifiedImages = sketchifiedImages[self.number_test:]
+        colorCues = colorCues[self.number_test:]
+
+        print(
+            'Training Data Shape:\n Colored: {}\n Sketches: {}\n ColorCues: {} '.format(
+                coloredImages.shape, sketchifiedImages.shape, colorCues.shape)
+        )
+        print(
+            'Check Norm via Max Values:\n Colored: {}\n Sketches: {}\n ColorCues: {} '.format(
+                np.amax(coloredImages), np.amax(sketchifiedImages), np.amax(colorCues))
+        )
+        return testColored, testSketch, testColorCues, coloredImages, sketchifiedImages, colorCues
+        
+    # Generates and saves images from test data using the trained model
+    def generate_images(self, testColored, testSketch, testColorCues, saveFolder):
+        imgcounter = 0
+        savepath = self.saveImg + saveFolder +'/'
+        delFold_RemakeFold(savepath)
+        number_test_here = testColored.shape[0]
+        for teststep in range(number_test_here//self.batch_size):
+            #iterate to get a batch
+            checkReal =  testColored[teststep*self.batch_size:(teststep+1)*self.batch_size]
+            checkSketch = testSketch[teststep*self.batch_size:(teststep+1)*self.batch_size]
+            checkColor =  testColorCues[teststep*self.batch_size:(teststep+1)*self.batch_size]
+            
+            evaluatedImages = self.sess.run(
+                        [self.gen_output], 
+                        feed_dict={
+                            self.real_images: checkReal,
+                            self.line_images: checkSketch,
+                            self.color_images: checkColor
+                            }
+                        )
+            evaluatedImages = np.squeeze(np.array(evaluatedImages))
+            print(evaluatedImages.shape)
+            for idx in range(self.batch_size):
+                # iterate over each image in the batch
+                savehere = savepath +str(imgcounter)+'.png'
+                self.viewTestResults(
+                    savehere,
+                    np.squeeze(checkReal[idx]), np.squeeze(checkSketch[idx]),
+                    np.squeeze(checkColor[idx]), np.squeeze(evaluatedImages[idx])
+                )   
+                imgcounter+=1
+        return
