@@ -433,3 +433,91 @@ class Color():
                 )   
                 imgcounter+=1
         return
+
+    def viewTestResults(self, savepath, realimage, sketch, colorcue, generatedImage):
+        fig1 = plt.figure()
+        axisList = addAxis(fig1, 2, 2)
+        axisList[0].imshow(realimage)
+        axisList[1].imshow(sketch, cmap='gray')
+        axisList[2].imshow(colorcue)
+        axisList[3].imshow(generatedImage)
+        groupFormat(axisList)
+        plt.tight_layout()
+        plt.savefig(savepath)
+        plt.close()
+
+        # fig1 = plt.figure()
+        # axisList = addAxis(fig1, 1, 3)
+        # axisList[0].imshow(realimage)
+        # axisList[1].imshow(sketch, cmap='gray')
+        # axisList[2].imshow(generatedImage)
+        # groupFormat(axisList)
+        # plt.tight_layout()
+        # plt.savefig(savepath)
+        # plt.close()
+        return 
+
+    # Trains the model, saving checkpoints and generating images after each epoch
+    def trainModel(self):
+        # Load Model Checkpoints, attempts to load a previos chekpoint if available
+        self.loadModel()
+
+        # get training data
+        testColored, testSketch, testColorCues,\
+        coloredImages, sketchifiedImages, colorCues = self.getModelTrainData()       
+        numimages = int(coloredImages.shape[0])
+
+        # Run Optimization
+        for epoch in range(self.num_epoch):
+            for step in range(numimages // self.batch_size):
+                batchColored = coloredImages[step*self.batch_size:(step+1)*self.batch_size]
+                batchSketch = sketchifiedImages[step*self.batch_size:(step+1)*self.batch_size]
+                batchCues = colorCues[step*self.batch_size:(step+1)*self.batch_size]
+                
+                d_loss, g_loss = self.sess.run(
+                    [self.d_loss, self.g_loss], 
+                    feed_dict={
+                        self.real_images: batchColored, self.line_images: batchSketch, self.color_images: batchCues
+                        }
+                    )
+                
+                # Print Step
+                if step % 1 == 0:
+                    print(
+                        'Epoch_{}: [{} / {}] d_loss {}, g_loss {}'.format(
+                            epoch, step, (numimages//self.batch_size), d_loss, g_loss
+                        )
+                    )
+            # Every Epoch save the model
+            self.save("./checkpoint", epoch*(numimages // self.batch_size ))        
+            self.generate_images(testColored, testSketch, testColorCues, str(epoch))
+
+        return
+    # Loads a trained model and generates images from a separate test dataset
+    def testModel(self):
+        # Load Model Checkpoints
+        self.loadModel()
+
+        # Load in Special Testing Data
+        coloredImages, colorCues, sketchifiedImages = self.unpackProcessedPickle(usepath=self.testpath)
+
+        # Test these images
+        self.generate_images(coloredImages, sketchifiedImages, colorCues, 'NewTestImages')
+
+        return
+
+##
+mode = 'train'
+
+##
+color = Color(
+    useColorCues=False, 
+    imgsize=256, batchsize=5, testmultiple = 10, 
+    num_epoch=16, dataSetSize=0)
+
+if mode == 'train':
+    color.trainModel()
+elif mode == 'test':
+    color.testModel()
+else:
+    print('Invalid Mode Command')
