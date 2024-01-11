@@ -253,3 +253,28 @@ class Color():
         total_disc_loss = real_loss + generated_loss
 
         return total_disc_loss
+
+    
+    # Otpimizer Step
+    # Performs a training step, updating generator and discriminator
+    @tf.function
+    def train_step(self):
+        with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
+            gen_output = self.generator(self.combined_preimage, training=True)
+            disc_real_output = self.discriminator([self.combined_preimage, self.real_images], training=True)
+            disc_generated_output = self.discriminator([self.combined_preimage, gen_output], training=True)
+
+            gen_total_loss, gen_gan_loss, gen_l1_loss = self.generator_loss(disc_generated_output, gen_output, self.real_images)
+            disc_loss = self.discriminator_loss(disc_real_output, disc_generated_output)
+
+        generator_gradients = gen_tape.gradient(gen_total_loss,
+                                                self.generator.trainable_variables)
+        discriminator_gradients = disc_tape.gradient(disc_loss,
+                                                    self.discriminator.trainable_variables)
+
+        self.generator_optimizer.apply_gradients(zip(generator_gradients,
+                                                self.generator.trainable_variables))
+        self.discriminator_optimizer.apply_gradients(zip(discriminator_gradients,
+                                                    self.discriminator.trainable_variables))
+
+        return gen_output, gen_total_loss, disc_loss
