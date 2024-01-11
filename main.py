@@ -278,3 +278,91 @@ class Color():
                                                     self.discriminator.trainable_variables))
 
         return gen_output, gen_total_loss, disc_loss
+    
+
+    ## Class Functions Calls 
+    # Initializes the model and attempts to load a checkpoint
+    def loadModel(self):
+        self.sess = tf.Session()
+        self.sess.run(tf.initialize_all_variables())
+
+        self.saver = tf.train.Saver()
+    
+        if self.load("./checkpoint"):
+            print("Loaded")
+        else:
+            print("Load failed")
+        return
+
+    # Loads a model checkpoint from a specified directory
+    def load(self, checkpoint_dir):
+        print(" [*] Reading checkpoint...")
+
+        model_dir = "tr"
+        checkpoint_dir = os.path.join(checkpoint_dir, model_dir)
+
+        ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
+        if ckpt and ckpt.model_checkpoint_path:
+            ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
+            self.saver.restore(self.sess, os.path.join(checkpoint_dir, ckpt_name))
+            return True
+        else:
+            return False
+        
+    # to save the model at a directory at a checkpoint
+    def save(self, checkpoint_dir, step):
+        model_name = "model"
+        model_dir = "tr"
+        checkpoint_dir = os.path.join(checkpoint_dir, model_dir)
+
+        if not os.path.exists(checkpoint_dir):
+            os.makedirs(checkpoint_dir)
+
+        self.saver.save(self.sess,
+                        os.path.join(checkpoint_dir, model_name),
+                        global_step=step)
+    
+    # Shuffles three arrays in unison, maintaining their corresponding elements
+    # - Ensures all arrays have the same length
+    # - Creates a random permutation of indices using a fixed seed for reproducibility
+    # - Returns shuffled copies of the arrays
+    def unison_shuffled_copies(self, a, b, c):
+        assert a.shape[0] == b.shape[0] == c.shape[0]
+        p = np.random.RandomState(seed=self.traintestSeed).permutation(len(a))
+        return a[p], b[p], c[p]
+
+    # Loads and unpacks data from multiple pickle files
+    # - Creates empty arrays to hold colored images, color cues, and sketchified images
+    # - Iterates through each pickle file:
+    #   - Loads data from the file
+    #   - Extracts colored images, sketchified images, and color cues (if enabled)
+    #   - Concatenates extracted data to the respective arrays
+    # - Removes the initial zero element from each array
+    # - Normalizes colored images to the range [0, 1]
+    # - Returns the unpacked arrays
+
+    def unpackProcessedPickle(self, usepath):
+        # create holder since usepath can have multiple pickle files
+        coloredImages = np.zeros((1,256,256,3), dtype=float)
+        colorCues = np.zeros((1,256,256,3), dtype=float)
+        sketchifiedImages = np.zeros((1,256,256,1), dtype=float)
+        for path in usepath:
+            with open(path[0], 'rb') as f:
+                loadeddata = pickle.load(f)
+                coloredImages_ = loadeddata['batchedColored']
+                sketchifiedImages_ = np.expand_dims(loadeddata['batchedSketchified'],3)  
+                # Select Color Cues 
+                if not self.useColorCues: #use Cues are False
+                    colorCues_ = np.ones_like(coloredImages_)
+                elif self.useColorCues:
+                    colorCues_ = loadeddata['batchedColorCues']
+
+                coloredImages = np.concatenate((coloredImages, coloredImages_),0)
+                colorCues = np.concatenate((colorCues, colorCues_),0)
+                sketchifiedImages = np.concatenate((sketchifiedImages, sketchifiedImages_),0)
+        
+        # Remove First zero element and Normalize as needed:
+        coloredImages = coloredImages[1:]/255.0
+        colorCues = colorCues[1:]
+        sketchifiedImages = sketchifiedImages[1:]
+        return coloredImages, colorCues, sketchifiedImages
