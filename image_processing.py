@@ -151,3 +151,77 @@ def compareSketchifyBlockSize():
     plt.savefig(savepath + 'OriginalColor1.png')
     plt.close()
     return
+
+# Generates a histogram to visualize the complexity distribution of a set of images
+def showDownloadComplexity(complexityValues, savepath=[]):
+    plt.figure()
+    plt.hist(complexityValues, bins=50)
+    plt.title('Complexity Distribution of Downloaded Tag Set')
+    plt.xlabel('Complexity Value')
+    plt.ylabel('Number Images')
+    if savepath:
+        plt.savefig(savepath + 'HistogramComplexity'+ '.png')
+        plt.close()
+    return
+
+# path to the dataset 
+tag = 'Images_makima_like'
+data = glob(os.path.join(tag, "*"))
+batchsize = len(data)
+# thresholding the complexity level
+complexityCeiling = 40
+save = True
+sigma = 30
+
+# Run Code Processing
+batchedColored = np.array(
+    [read_and_reshape(imagepath) for imagepath in data[0:batchsize]])
+batchedSketchified = np.array(
+    [cvSketchify(image, blockSize=7) for image in batchedColored])
+
+complexityValues = np.array(
+    [complexityMetric(bwimage) for bwimage in batchedSketchified])
+
+complexityThreshold = np.squeeze(np.array(np.where(complexityValues < complexityCeiling)))
+batchedColored_Thresh = batchedColored[complexityThreshold]
+batchedSketchified_Thresh = batchedSketchified[complexityThreshold]
+
+# Create Color Cues
+# generates a gaussian kernel and applies it on the batch of images
+x = np.arange(0, 256) - 128
+X,Y = np.meshgrid(x,x)
+kernel = 1/(sigma**2 *2*np.pi) * np.exp(-1/2 *(X**2 + Y**2)/sigma**2)
+kernel3 = np.repeat(np.expand_dims(kernel,2),3,2)
+batchedColorCues_Thresh = np.array(
+   [genColorCues(cimg) for cimg in batchedColored_Thresh])
+
+# conditionally saves the images
+if save:
+    # save the batched images to file
+    print(batchedColored_Thresh.shape)
+    print(batchedSketchified_Thresh.shape)
+    print(batchedColorCues_Thresh.shape)
+    filename = tag + '_CollectionProcessed.pickle'
+    with open(filename, 'wb') as f:
+        data = {
+            'batchedColored': batchedColored_Thresh,
+            'batchedSketchified': batchedSketchified_Thresh,
+            'batchedColorCues': batchedColorCues_Thresh
+        }
+        pickle.dump(data, f, protocol=4)
+    print('Pickle File Saved')
+
+if save:
+    savepath = 'SaveImagesForPaper/' + tag + '/'
+    delFold_RemakeFold(savepath)
+else: 
+    savepath = []
+#batchPlotImages(batchedColored_Thresh, batchedSketchified_Thresh, savepath=savepath, numplot=5)
+#batchPlotImages2(batchedColored_Thresh, batchedSketchified_Thresh, batchedColorCues_Thresh, savepath=savepath, numplot=5)
+
+# plots the saved images with complexity graphs
+showDownloadComplexity(complexityValues, savepath=savepath)
+plt.show()
+
+
+
